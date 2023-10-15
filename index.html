@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Edit PDF</title>
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css"> -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #333;
+            color: #fff;
+        }
+        #pdfInput {
+            display: none;
+        }
+        #dragDropContainer {
+            border: 2px dashed #3498db;
+            padding: 20px;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+            width: 350px;
+            height: 300px;
+            margin: 0 auto 20px auto;
+        }
+        #dragDropContainer:hover {
+            border-color: #0099ff;
+        }
+        button {
+            background-color: #2ecc71;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #27ae60;
+        }
+        #downloadLink {
+            display: none;
+            margin-top: 20px;
+        }
+
+    </style>
+    
+</head>
+<body>
+    <h1>Edit PDF</h1>
+    <div id="dragDropContainer">
+        <p>Drag & Drop</p>
+        <p id="fileName"></p>
+    </div>
+    <label for="deletePagesInput">الصفحات المراد حذفها (من - إلى):</label>
+    <input type="text" id="deletePagesInput" placeholder="مثال: 1-3, 5, 7-10">
+    <button id="editPdfButton">تحرير PDF</button>
+    <input type="file" id="pdfInput" accept=".pdf" multiple>
+    <!-- <button id="editPdfButton">تحرير PDF</button> -->
+    <a href="#" id="downloadLink">تنزيل الملفات المحدثة</a>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.16.0/pdf-lib.min.js"></script>
+    <script>
+        const dragDropContainer = document.getElementById('dragDropContainer');
+        const pdfInput = document.getElementById('pdfInput');
+        const fileName = document.getElementById('fileName');
+        const editPdfButton = document.getElementById('editPdfButton');
+
+        // تحديث الواجهة لاستجابة السحب والإفلات
+        dragDropContainer.addEventListener('dragenter', (e) => {e.preventDefault();});
+        dragDropContainer.addEventListener('dragover', (e) => {e.preventDefault();dragDropContainer.style.borderColor = 'red';});
+        dragDropContainer.addEventListener('dragleave', () => {dragDropContainer.style.borderColor = '#3498db';});
+        let pdfFiles; // Define pdfFiles at a higher scope
+
+        dragDropContainer.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            dragDropContainer.style.borderColor = '#3498db';
+            pdfFiles = e.dataTransfer.files; // Assign pdfFiles here
+            console.log(pdfFiles);
+            fileName.innerText = pdfFiles[0].name;
+            // handlePdfFiles(pdfFiles);
+        });
+
+        pdfInput.addEventListener('change', (e) => {
+            pdfFiles = e.target.files; // Assign pdfFiles here as well
+            // handlePdfFiles(pdfFiles);
+        });
+
+        editPdfButton.addEventListener('click', () => {
+            handlePdfFiles(pdfFiles);
+        });
+
+        async function handlePdfFiles(pdfFiles) {
+            for (let i = 0; i < pdfFiles.length; i++) {
+                const pdfFile = pdfFiles[i];
+                await handlePdfFile(pdfFile, i);
+            }
+        }
+
+        async function handlePdfFile(pdfFile, index) {
+            if (pdfFile) {
+                const reader = new FileReader();
+                reader.onload = async function () {
+                    const pdfBytes = new Uint8Array(reader.result);
+                    // استيراد المكتبة
+                    const { PDFDocument } = PDFLib;
+                    // إنشاء مستند PDF من البيانات المُقروءة
+                    const pdfDoc = await PDFDocument.load(pdfBytes);
+                    
+                     // احصل على النص المُدخل من المستخدم
+                    const deletePagesInput = document.getElementById('deletePagesInput').value;
+                    const ranges = deletePagesInput.split(',').map(range => range.trim());
+                    for (const range of ranges) {
+                        if (range.includes('-')) {
+                            const [start, end] = range.split('-').map(Number);
+                            if (!isNaN(start)) {
+                                if (!isNaN(end)) {
+                                    // إنشاء مصفوفة لتخزين الأرقام في النطاق
+                                    var numbersArray = [];
+                                    // إضافة الأرقام إلى المصفوفة
+                                    for (var i = (start-1); i <= (end-1); i++) {
+                                        numbersArray.push(Number(i));
+                                    }
+                                    // الآن لديك مصفوفة تحتوي على جميع الأرقام في النطاق
+                                    pdfDoc.removePage(numbersArray);
+                                } else {
+                                    pdfDoc.removePage(start);
+                                    console.log(start);
+                                }
+                            }
+                        } else {
+                            const page = Number(range);
+                            if (!isNaN(page)) {
+                                pdfDoc.removePage(page);
+                                console.log(page);
+                            }
+                        }
+                    }
+                    
+                    // تحويل المستند المحدث إلى مصفوفة بيانات
+                    const modifiedPdfBytes = await pdfDoc.save();
+                    // إنشاء اسم الملف المعدل مع مؤشر الفهرس
+                    const originalFileName = pdfFile.name;
+                    const modifiedFileName = originalFileName.replace(/\.pdf$/, '--1.pdf');
+                    // إنشاء ملف PDF جديد وتنزيله
+                    const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = modifiedFileName;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                };
+                reader.readAsArrayBuffer(pdfFile);
+            }
+        }
+    </script>
+</body>
+</html>
